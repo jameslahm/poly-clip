@@ -1,0 +1,83 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'poly-clip'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=poly-clip"
+                ],
+                "filter": {
+                    "name": "poly-clip",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'poly-clip'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=poly-clip",
+                    "--package=poly-clip"
+                ],
+                "filter": {
+                    "name": "poly-clip",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'poly-clip'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=poly-clip",
+                    "--package=poly-clip"
+                ],
+                "filter": {
+                    "name": "poly-clip",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'web'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=web",
+                    "--package=poly-clip"
+                ],
+                "filter": {
+                    "name": "web",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

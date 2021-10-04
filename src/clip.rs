@@ -1,8 +1,9 @@
-use  std::{cmp, ops::Index, ptr::Pointee, vec};
+use  std::{cmp, vec};
+
 
 use crate::clip;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Vertex {
     x:i32,
     y:i32
@@ -17,13 +18,13 @@ impl Vertex {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum DegreeType {
     In,
     Out
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Intersect {
     degree: DegreeType,
     x: i32,
@@ -47,6 +48,7 @@ impl Intersect {
 }
 
 
+#[derive(Debug, Clone)]
 pub struct Polygon {
     pub points: Vec<Vertex>
 }
@@ -60,7 +62,8 @@ impl Polygon {
 }
 
 // This is point, with point and in or out, and intersect info
-enum Point {
+#[derive(PartialEq, Clone, Copy)]
+pub enum Point {
     Intersect(Intersect),
     Vertex(Vertex)
 }
@@ -95,6 +98,10 @@ pub fn intersect_line(p0: Vertex, p1:Vertex, p2:Vertex, p3:Vertex)-> Option<Vert
     let l2 = a*f - e*c;
     let l = a*d - b*c;
 
+    if l==0 {
+        return None;
+    }
+
     let x = l1 / l;
     let y = l2 / l;
 
@@ -128,7 +135,7 @@ fn distance(x1:i32, y1:i32,x2:i32,y2:i32) -> i32 {
 
 impl Polygon {
     // self is clip polygon,
-    pub fn clip(self: &Self, primary_polygon: &Polygon) {
+    pub fn clip(self: &Self, primary_polygon: &Polygon) -> Vec<Polygon> {
         let intersect_points = self.intersect(primary_polygon);
 
         let mut primary_list = primary_polygon.generate_list(intersect_points.clone(), 1);
@@ -138,16 +145,13 @@ impl Polygon {
 
         self.generate_clip_degree(&mut clip_list, &mut primary_list);
 
-
-
-
-
+        return self.generate_area(&mut primary_list, &mut clip_list);
     }
 
-    pub fn generate_area(self: &Self, primary_list:&mut Vec<Point>, clip_list:&mut Vec<Point>) {
-        let polygons = vec![];
-        let polgon = Polygon::new(vec![]);
-        let index = 0;
+    pub fn generate_area(self: &Self, primary_list:&mut Vec<Point>, clip_list:&mut Vec<Point>) -> Vec<Polygon> {
+        let mut polygons = vec![];
+        let mut polgon = Polygon::new(vec![]);
+        let mut index = 0;
         for _ in primary_list.iter() {
             let point = primary_list[index];
             match point {
@@ -160,7 +164,7 @@ impl Polygon {
             }
             index+=1;
         }
-        while true {
+        loop {
             if index== primary_list.len() {
                 break;
             }
@@ -182,7 +186,7 @@ impl Polygon {
                 index+=1;
             }
 
-            let index1 = 0;
+            let mut index1 = 0;
             while index1 < clip_list.len() {
                 if clip_list[index1] == primary_list[index] {
                     break;
@@ -205,8 +209,8 @@ impl Polygon {
                 index1+=1;
             }
 
-            if polgon.points[0] == clip_list[index1] {
-                polygons.push(polgon);
+            if polgon.points[0] == Vertex::from_point(clip_list[index1]) {
+                polygons.push(polgon.clone());
                 polgon.points.clear();
                 while index < primary_list.len() {
                     match primary_list[index] {
@@ -231,6 +235,7 @@ impl Polygon {
                 index +=1;
             }
         }
+        return polygons;
     }
 
     // arrow line
@@ -336,3 +341,4 @@ impl Polygon {
         }
     }
 }
+

@@ -1,4 +1,4 @@
-mod clip;
+pub mod clip;
 
 use wasm_bindgen::prelude::*;
 
