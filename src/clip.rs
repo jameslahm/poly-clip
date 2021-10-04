@@ -83,7 +83,7 @@ pub fn intersect_line(p0: Vertex, p1:Vertex, p2:Vertex, p3:Vertex)-> Option<Vert
     // ax+by = e
     // cx + dy = f
     let a = -(p0.y - p1.y);
-    let b = p0.x - p1.y;
+    let b = p0.x - p1.x;
 
     let c = -(p2.y - p3.y);
     let d = p2.x - p3.x;
@@ -158,11 +158,15 @@ impl Polygon {
                 Point::Intersect(inter)=>{
                     if matches!(inter.degree, DegreeType::In) {
                         break;
+                    } else {
+                        index +=1;
                     }
                 }
-                _ => {}
+                _ => {
+                    index+=1;
+                }
             }
-            index+=1;
+
         }
         loop {
             if index== primary_list.len() {
@@ -176,40 +180,47 @@ impl Polygon {
                     Point::Intersect(inter)=>{
                         if !matches!(inter.degree, DegreeType::In) {
                             break;
+                        } else {
+                            polgon.points.push(Vertex::from_point(primary_list[index]));
+                            index+=1;
                         }
                     }
                     Point::Vertex(v) => {
-
+                        polgon.points.push(Vertex::from_point(primary_list[index]));
+                        index+=1;
                     }
                 }
-                polgon.points.push(Vertex::from_point(primary_list[index]));
-                index+=1;
+
             }
 
             let mut index1 = 0;
             while index1 < clip_list.len() {
                 if clip_list[index1] == primary_list[index] {
                     break;
+                } else {
+                    index1+=1;
                 }
-                index1+=1;
             }
 
-            while index1 < clip_list.len() {
-                match clip_list[index1] {
+            loop {
+                match clip_list[index1 % clip_list.len()] {
                     Point::Intersect(inter)=>{
                         if matches!(inter.degree, DegreeType::In) {
                             break;
+                        } else {
+                            polgon.points.push(Vertex::from_point(clip_list[index1 % clip_list.len()]));
+                            index1+=1;
                         }
                     }
                     Point::Vertex(v) => {
-
+                        polgon.points.push(Vertex::from_point(clip_list[index1 % clip_list.len()]));
+                        index1+=1;
                     }
                 }
-                polgon.points.push(Vertex::from_point(clip_list[index]));
-                index1+=1;
+
             }
 
-            if polgon.points[0] == Vertex::from_point(clip_list[index1]) {
+            if polgon.points[0] == Vertex::from_point(clip_list[index1 % clip_list.len()]) {
                 polygons.push(polgon.clone());
                 polgon.points.clear();
                 while index < primary_list.len() {
@@ -217,19 +228,22 @@ impl Polygon {
                         Point::Intersect(inter)=>{
                             if matches!(inter.degree, DegreeType::In) {
                                 break;
+                            } else {
+                                polgon.points.push(Vertex::from_point(primary_list[index]));
+                                index+=1;
                             }
                         }
                         Point::Vertex(v) => {
-
+                            polgon.points.push(Vertex::from_point(primary_list[index]));
+                            index+=1;
                         }
                     }
-                    polgon.points.push(Vertex::from_point(primary_list[index]));
-                    index+=1;
+
                 }
                 continue;
             }
             while index < primary_list.len() {
-                if primary_list[index]==clip_list[index1] {
+                if primary_list[index]==clip_list[index1 % clip_list.len()] {
                     break;
                 }
                 index +=1;

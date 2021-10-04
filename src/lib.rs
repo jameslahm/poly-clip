@@ -17,7 +17,5 @@ extern {
 
 #[wasm_bindgen]
 pub fn greet() {
-    unsafe {
-        alert("Hello, poly-clip!");
-    }
+    alert("Hello, poly-clip!");
 }
