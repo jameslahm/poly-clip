@@ -1,9 +1,10 @@
 use  std::{cmp, vec};
+use serde::{Serialize, Deserialize};
 
 
 use crate::clip;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Vertex {
     x:i32,
     y:i32
@@ -48,7 +49,7 @@ impl Intersect {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Polygon {
     pub points: Vec<Vertex>
 }
