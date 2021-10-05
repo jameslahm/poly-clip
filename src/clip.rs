@@ -1,26 +1,35 @@
-use std::cmp::Ordering;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::cmp::{max, min, Ordering};
 
-#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
+#[derive(Clone, Debug, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Point {
     pub x: i32,
     pub y: i32,
 }
+
+impl Point {
+    pub fn new(x: i32, y: i32) -> Self {
+        Point { x, y }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Line {
     pub start: Point,
     pub end: Point,
 }
 
+// The first Vec<Point> is outer ring
+// The rest Vec<Point> is inner rings
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Polygon {
-    pub points: Vec<Vec<Point>>,
+    pub rings: Vec<Vec<Point>>,
 }
 
 #[derive(Clone, Debug)]
 enum PolyListOption {
-    List(Vec<InterVertex>),
-    InsidePoly(Vec<Point>),
+    List(Vec<Vec<InterVertex>>),
+    InsidePoly(Vec<Vec<Point>>),
     None,
 }
 
@@ -64,30 +73,26 @@ impl InterVertex {
     }
 }
 
-impl PartialEq for Point {
-    fn eq(&self, other: &Point) -> bool {
-        self.x == other.x && self.y == other.y
-    }
-}
-
-impl Eq for Point {}
-
 impl Point {
     pub fn is_in_polygon(&self, poly: &Polygon) -> bool {
-        let (x, y) = (self.x, self.y);
-        let mut inside: bool = false;
-        let mut j = poly.points.len() - 1;
-        for (i, p) in poly.points.iter().enumerate() {
-            let (xi, yi) = (p.x, p.y);
-            let (xj, yj) = (poly.points[j].x, poly.points[j].y);
-            let intersect = ((yi > y) != (yj > y))
-                && ((x as f64) < ((xj - xi) * (y - yi)) as f64 / (yj - yi) as f64 + xi as f64);
-            if intersect {
-                inside = !inside;
+        let mut count = 0;
+        for points in poly.rings.iter() {
+            for (i, _) in points.iter().enumerate() {
+                let p0 = points[i];
+                let p1 = points[(i + 1) % points.len()];
+                if p0.y == p1.y {
+                    continue;
+                };
+                if self.y < min(p0.y, p1.y) || self.y >= max(p0.y, p1.y) {
+                    continue;
+                }
+                let inter_x = (self.y - p0.y) * (p1.x - p0.x) / (p1.y - p0.y) + p0.x;
+                if inter_x > self.x {
+                    count += 1;
+                }
             }
-            j = i;
         }
-        inside
+        return count % 2 == 1;
     }
 
     fn distance_cmp(&self, first: &Point, second: &Point) -> Ordering {
@@ -102,62 +107,31 @@ impl Point {
             Ordering::Equal
         }
     }
+}
 
-    pub fn is_in_line(&self, line: &Line) -> bool {
-        let dxc = self.x - line.start.x;
-        let dyc = self.y - line.start.y;
+fn get_first_outside_vertex_index(points: &Vec<Point>, poly: &Polygon) -> Option<usize> {
+    points.iter().position(|ref x| !x.is_in_polygon(poly))
+}
 
-        let dxl = line.end.x - line.start.x;
-        let dyl = line.end.y - line.start.y;
-
-        let cross = dxc * dyl - dyc * dxl;
-
-        if cross != 0 {
-            return false;
-        }
-
-        if dxl.abs() >= dyl.abs() {
-            if dxl > 0 {
-                line.start.x <= self.x && self.x <= line.end.x
-            } else {
-                line.end.x <= self.x && self.x <= line.start.x
-            }
-        } else {
-            if dyl > 0 {
-                line.start.y <= self.y && self.y <= line.end.y
-            } else {
-                line.end.y <= self.y && self.y <= line.start.y
-            }
-        }
-    }
+fn get_first_inside_vertex_index(points: &Vec<Point>, poly: &Polygon) -> Option<usize> {
+    points.iter().position(|ref x| x.is_in_polygon(poly))
 }
 
 impl Polygon {
-    pub fn is_clockwise(&self) -> bool {
-        let mut sum = 0;
-        for (i, p) in self.points.iter().enumerate() {
-            let j = if i != self.points.len() - 1 { i + 1 } else { 0 };
-            sum += (self.points[j].x - p.x) * (self.points[j].y + p.y)
-        }
-        sum < 0
-    }
-    fn get_reversed(&self) -> Polygon {
-        let points: Vec<Point> = self.points.iter().rev().map(|n| n.clone()).collect();
-        Polygon { points }
-    }
-
     pub fn clip(&self, other: &Polygon) -> Option<Vec<Vec<Point>>> {
         let option = self.get_inter_vertex_list(other);
         let other_option = other.get_inter_vertex_list(self);
         match option {
             PolyListOption::List(subject_list) => match other_option {
                 PolyListOption::List(clip_list) => {
-                    Polygon::get_clip_polygons(subject_list, clip_list)
+                    let list1 = subject_list.into_iter().flatten().collect();
+                    let list2 = clip_list.into_iter().flatten().collect();
+                    Polygon::get_clip_polygons(list1, list2)
                 }
-                PolyListOption::InsidePoly(list) => Some(vec![list]),
+                PolyListOption::InsidePoly(list) => Some(list),
                 PolyListOption::None => None,
             },
-            PolyListOption::InsidePoly(list) => Some(vec![list]),
+            PolyListOption::InsidePoly(list) => Some(list),
             PolyListOption::None => None,
         }
     }
@@ -189,7 +163,6 @@ impl Polygon {
         initial: Point,
     ) -> Option<Vec<Point>> {
         let mut result: Vec<Point> = Vec::new();
-
 
         let mut subject_as_list = true;
         let mut start_point = initial.clone();
@@ -243,7 +216,8 @@ impl Polygon {
         let mut last_point: Option<Point> = None;
         let (mut start_i, mut end_i) = (0, 0);
         let dont_skip = list[0].get_point() == start_point;
-        let points: Vec<Point> = list.iter()
+        let points: Vec<Point> = list
+            .iter()
             .enumerate()
             .skip_while(|x| {
                 // need to skip until InIntersection occurs,
@@ -296,66 +270,62 @@ impl Polygon {
     }
 
     fn get_inter_vertex_list(&self, poly: &Polygon) -> PolyListOption {
-        let mut subject = self.clone();
-        if !subject.is_clockwise() {
-            subject = self.get_reversed();
-        }
-        let mut cursor_inside = false;
-        let mut intersection_count = 0;
-        if let Some(start_index) = subject.get_first_outside_vertex_index(poly) {
-            if let None = subject.get_first_inside_vertex_index(poly) {
-                if poly.points.iter().all(|x| x.is_in_polygon(&subject)) {
-                    return PolyListOption::InsidePoly(poly.points.clone());
-                }
-            };
-            let result = subject
-                .points
-                .iter()
-                .enumerate()
-                .skip(start_index)
-                .chain(subject.points.iter().enumerate().take(start_index))
-                .fold(Vec::new(), |mut acc, x| {
-                    let (i, start) = x;
-
-                    // check vertex
-                    if i != start_index && start.is_in_polygon(poly) {
-                        acc.push(InterVertex::InsideVertex(start.clone()));
-                    } else {
-                        acc.push(InterVertex::OutsideVertex(start.clone()));
+        let mut res = vec![];
+        for (i, points) in self.rings.iter().enumerate() {
+            let subject = points.clone();
+            let mut cursor_inside = if i == 0 { false } else { false };
+            if let Some(start_index) = get_first_outside_vertex_index(&subject, poly) {
+                if let None = get_first_inside_vertex_index(&subject, poly) {
+                    if poly.rings.iter().flatten().all(|x| x.is_in_polygon(self)) {
+                        return PolyListOption::InsidePoly(poly.rings.clone());
                     }
+                };
+                let result = subject
+                    .iter()
+                    .enumerate()
+                    .skip(start_index)
+                    .chain(subject.iter().enumerate().take(start_index))
+                    .fold(Vec::new(), |mut acc, x| {
+                        let (i, start) = x;
 
-                    // check intersection
-                    let next_i = if i == subject.points.len() - 1 {
-                        0
-                    } else {
-                        i + 1
-                    };
+                        // check vertex
+                        if i != start_index && start.is_in_polygon(poly) {
+                            acc.push(InterVertex::InsideVertex(start.clone()));
+                        } else {
+                            acc.push(InterVertex::OutsideVertex(start.clone()));
+                        }
 
-                    let end = subject.points[next_i].clone();
-                    let line = Line {
-                        start: start.clone(),
-                        end,
-                    };
-                    let mut intersections =
-                        poly.get_intersections_with_line(&line, &mut cursor_inside);
-                    intersection_count = intersection_count + intersections.len();
-                    acc.append(&mut intersections);
-                    acc
-                });
-            // Check if there are any intersection
-            if result.iter().find(|x| {
-                match **x {
-                    InterVertex::InsideVertex(_) | InterVertex::OutsideVertex(_) => false,
-                    InterVertex::InIntersection(_) | InterVertex::OutIntersection(_) => true,
+                        // check intersection
+                        let next_i = if i == subject.len() - 1 { 0 } else { i + 1 };
+
+                        let end = subject[next_i].clone();
+                        let line = Line {
+                            start: start.clone(),
+                            end,
+                        };
+                        let mut intersections =
+                            poly.get_intersections_with_line(&line, &mut cursor_inside);
+                        acc.append(&mut intersections);
+                        acc
+                    });
+                // Check if there are any intersection
+                if result
+                    .iter()
+                    .find(|x| match **x {
+                        InterVertex::InsideVertex(_) | InterVertex::OutsideVertex(_) => false,
+                        InterVertex::InIntersection(_) | InterVertex::OutIntersection(_) => true,
+                    })
+                    .is_none()
+                {
+                    // res.push(PolyListOption::None)
+                } else {
+                    res.push(result);
                 }
-            }).is_none() {
-                PolyListOption::None
             } else {
-                PolyListOption::List(result)
+                return PolyListOption::InsidePoly(self.rings.clone());
             }
-        } else {
-            PolyListOption::InsidePoly(self.points.clone())
         }
+        PolyListOption::List(res)
     }
 
     fn get_intersections_with_line(
@@ -363,29 +333,33 @@ impl Polygon {
         line: &Line,
         cursor_inside: &mut bool,
     ) -> Vec<InterVertex> {
-        let mut lines: Vec<Point> = self.points
-            .iter()
-            .enumerate()
-            .filter_map(|x| {
-                let (i, start) = x;
-                let next_i = if i == self.points.len() - 1 { 0 } else { i + 1 };
-                let end = self.points[next_i].clone();
-                let l = Line {
-                    start: start.clone(),
-                    end,
-                };
-                if let Some(p) = l.get_intersection(line) {
-                    if p == line.start || p == line.end ||
-                        p == *start || p == end {
-                        None
-                    } else {
-                        Some(p)
-                    }
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let mut lines: Vec<Point> = vec![];
+        for points in self.rings.iter() {
+            let mut line:Vec<Point> =
+                points
+                    .iter()
+                    .enumerate()
+                    .filter_map(|x| {
+                        let (i, start) = x;
+                        let next_i = if i == points.len() - 1 { 0 } else { i + 1 };
+                        let end = points[next_i].clone();
+                        let l = Line {
+                            start: start.clone(),
+                            end,
+                        };
+                        if let Some(p) = l.get_intersection(line) {
+                            if p == line.start || p == line.end || p == *start || p == end {
+                                None
+                            } else {
+                                Some(p)
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+            lines.append(&mut line);
+        }
         lines.sort_by(|a, b| line.start.distance_cmp(a, b));
         lines
             .iter()
@@ -401,50 +375,58 @@ impl Polygon {
             .collect()
     }
 
-    fn get_first_outside_vertex_index(&self, poly: &Polygon) -> Option<usize> {
-        self.points.iter().position(|ref x| !x.is_in_polygon(poly))
-    }
-
-    fn get_first_inside_vertex_index(&self, poly: &Polygon) -> Option<usize> {
-        self.points.iter().position(|ref x| x.is_in_polygon(poly))
-    }
-
-    pub fn new(points: Vec<Point>) -> Self {
-        Polygon {
-            points
-        }
+    pub fn new(rings: Vec<Vec<Point>>) -> Self {
+        Polygon { rings }
     }
 }
 impl Line {
     pub fn get_intersection(self, line: &Line) -> Option<Point> {
-        let (line_1_start, line_1_end) = (self.start, self.end);
-        let (line_2_start, line_2_end) = (line.start.clone(), line.end.clone());
+        let (p0, p1) = (self.start, self.end);
+        let (p2, p3) = (line.start, line.end);
+        // ax + by = e
+        // cx + dy = f
+        let a = -(p0.y - p1.y);
+        let b = p0.x - p1.x;
 
-        let den = ((line_2_end.y - line_2_start.y) * (line_1_end.x - line_1_start.x))
-            - ((line_2_end.x - line_2_start.x) * (line_1_end.y - line_1_start.y));
+        let c = -(p2.y - p3.y);
+        let d = p2.x - p3.x;
 
-        if den == 0 {
+        let e = a * p0.x + b * p0.y;
+        let f = c * p2.x + d * p2.y;
+
+        // x = l1 / l
+        // y = l2 / l
+
+        let l1 = e * d - b * f;
+        let l2 = a * f - e * c;
+        let l = a * d - b * c;
+
+        if l == 0 {
             return None;
         }
 
-        let a = line_1_start.y - line_2_start.y;
-        let b = line_1_start.x - line_2_start.x;
+        let x = l1 / l;
+        let y = l2 / l;
 
-        let num_1 = ((line_2_end.x - line_2_start.x) * a) - ((line_2_end.y - line_2_start.y) * b);
-        let num_2 = ((line_1_end.x - line_1_start.x) * a) - ((line_1_end.y - line_1_start.y) * b);
+        let line1_min_x = min(p0.x, p1.x);
+        let line1_max_x = max(p0.x, p1.x);
+        let line1_min_y = min(p0.y, p1.y);
+        let line1_max_y = max(p0.y, p1.y);
 
-        let a = num_1 as f64 / den as f64;
-        let b = num_2 as f64 / den as f64;
+        let line2_min_x = min(p2.x, p3.x);
+        let line2_max_x = max(p2.x, p3.x);
+        let line2_min_y = min(p2.y, p3.y);
+        let line2_max_y = max(p2.y, p3.y);
 
-        if a < 0.0 || a > 1.0 || b < 0.0 || b > 1.0 {
+        let x_in_bound =
+            x >= line1_min_x && x <= line1_max_x && x >= line2_min_x && x <= line2_max_x;
+        let y_in_bound =
+            y >= line1_min_y && y <= line1_max_y && y >= line2_min_y && y <= line2_max_y;
+
+        if x_in_bound && y_in_bound {
+            return Some(Point::new(x, y));
+        } else {
             return None;
         }
-
-        let result = Point {
-            x: line_1_start.x + (a * (line_1_end.x - line_1_start.x) as f64).round() as i32,
-            y: line_1_start.y + (a * (line_1_end.y - line_1_start.y) as f64).round() as i32,
-        };
-
-        Some(result)
     }
 }

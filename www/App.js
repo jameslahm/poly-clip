@@ -1,50 +1,64 @@
-import React, { Component, useState } from "react";
+import React, { Component, useEffect, useState } from "react";
 import Konva from "konva";
 import { render } from "react-dom";
-import { Stage, Layer, Group, Line, Rect } from "react-konva";
+import { Stage, Layer, Group, Line, Rect, Ellipse } from "react-konva";
 import * as wasm from "hello-wasm-pack";
+import toast, { Toaster } from "react-hot-toast";
 function getRandomColor() {
-  var letters = '0123456789ABCDEF';
-  var color = '#';
+  var letters = "0123456789ABCDEF";
+  var color = "#";
   for (var i = 0; i < 6; i++) {
     color += letters[Math.floor(Math.random() * 16)];
   }
   return color;
 }
 
+document.addEventListener(
+  "contextmenu",
+  function (e) {
+    e.preventDefault();
+  },
+  false
+);
+
+function Button({onClick, children}){
+  return <button style={{
+    margin: "0 4px",
+    padding: "8px 16px",
+    borderRadius: "5px",
+    border: "none",
+    cursor: 'pointer',
+    boxShadow:"0px 1px 2px rgba(126,56,0,0.5)"
+  }
+  } onClick={onClick}>{children}</button>
+}
+
 function App() {
   const [points, setPoints] = useState([]);
   const [curMousePos, setCurMousePos] = useState([0, 0]);
-  const [isMouseOverStartPoint, setIsMouseOverStartPoint] = useState(false);
-  const [polygons, setPolygons] = useState([]);
-	const [intersect, setIntersect] = useState([])
+  const [primaryPolygons, setPrimaryPolygons] = useState([]);
+  const [clipPolygons, setClipPolygons] = useState([]);
+  const [intersect, setIntersect] = useState([]);
+
+  const [stage, setStage] = useState("PRIMARY");
 
   const getMousePos = (stage) => {
     return [stage.getPointerPosition().x, stage.getPointerPosition().y];
   };
   const handleClick = (event) => {
-    const stage = event.target.getStage();
-    const mousePos = getMousePos(stage);
+    const mousePos = getMousePos(event.target.getStage());
 
-    if (isMouseOverStartPoint && points.length >= 3) {
+    // right click
+    if (event.evt.button === 2) {
+      event.evt.preventDefault();
+      event.evt.stopPropagation();
       setPoints([]);
-			setPolygons([...polygons, [...points]])
-			if(polygons.length===1){
-				const getVertex = (points) => {
-					return points.map(p=>{
-						return {
-							x: p[0],
-							y: p[1]
-						}
-					})
-				}
-				let res = wasm.clip(getVertex(polygons[0]),getVertex(points))
-				console.log(res)
-				res = res[0].map(p=>{
-					return [p.x,p.y]
-				});
-				setIntersect(res)
-			}
+
+      if (stage === "PRIMARY") {
+        setPrimaryPolygons([...primaryPolygons, [...points, mousePos]]);
+      } else {
+        setClipPolygons([...clipPolygons, [...points, mousePos]]);
+      }
     } else {
       setPoints([...points, mousePos]);
     }
@@ -55,90 +69,179 @@ function App() {
 
     setCurMousePos(mousePos);
   };
-  const handleMouseOverStartPoint = (event) => {
-    event.target.scale({ x: 2, y: 2 });
-    setIsMouseOverStartPoint(true);
-  };
-  const handleMouseOutStartPoint = (event) => {
-    event.target.scale({ x: 1, y: 1 });
-    setIsMouseOverStartPoint(false);
+
+  const handleClip = () => {
+    const primary = primaryPolygons.map((points) => {
+      return points.map((p) => {
+        return {
+          x: p[0],
+          y: p[1],
+        };
+      });
+    });
+    const clip = clipPolygons.map((points) => {
+      return points.map((p) => {
+        return {
+          x: p[0],
+          y: p[1],
+        };
+      });
+    });
+    console.log(primary, clip);
+    const res = wasm.clip(clip, primary);
+    if (!res) {
+      return;
+    }
+    const _intersect = res.map((points) => {
+      return points.map((p) => {
+        return [p.x, p.y];
+      });
+    });
+    console.log(_intersect);
+    setIntersect(_intersect);
   };
 
-  const handleDragMovePoint = (event) => {
-    const points = this.state.points;
-    const index = event.target.index - 1;
-    const pos = [event.target.attrs.x, event.target.attrs.y];
-    setPoints([...points.slice(0, index), pos, ...points.slice(index + 1)]);
-  };
-
-	const renderPoints = (points, flattenedPoints, index, closed, color) =>{
-		return <>
-			<Line
-				key={index}
-				points={flattenedPoints}
-				stroke="black"
-				strokeWidth={5}
-				closed={true}
-				draggable
-				fill={color}
-			/>
-		{
-			points.map((point, index) => {
-				const width = 6;
-				const x = point[0] - width / 2;
-				const y = point[1] - width / 2;
-				const startPointAttr =
-					index === 0
-						? {
-								hitStrokeWidth: 12,
-								onMouseOver: handleMouseOverStartPoint,
-								onMouseOut: handleMouseOutStartPoint,
-							}
-						: null;
-				return (
-					<Rect
-						key={index}
-						x={x}
-						y={y}
-						width={width}
-						height={width}
-						fill="white"
-						stroke="black"
-						strokeWidth={3}
-						onDragMove={handleDragMovePoint}
-						{...startPointAttr}
-					/>
-				);
-			})
-		}
-		</>
-	}
-
-	const flattenedPoints = points.concat(curMousePos)
+  const flattenedPoints = points
+    .concat(curMousePos)
     .reduce((a, b) => a.concat(b), []);
-	const intersects = intersect.reduce((a,b)=>a.concat(b),[])
+  const intersects = intersect.reduce((a, b) => a.concat(b), []);
 
   return (
-    <Stage
-      width={window.innerWidth}
-      height={window.innerHeight}
-      onMouseDown={handleClick}
-      onMouseMove={handleMouseMove}
-    >
-      <Layer>
-        {polygons.map((points,index) => {
-          const flattenedPoints = points
-            .reduce((a, b) => a.concat(b), []);
-					return renderPoints(points, flattenedPoints, index, true, "red")
-        })}
-				{
-					renderPoints(points, flattenedPoints, -1, false, "red")
-				}
-				{
-					renderPoints(intersect, intersects, -2, false, "blue")
-				}
-      </Layer>
-    </Stage>
+    <>
+      <div style={{display:"flex", justifyContent:"end"}}>
+        <Button onClick={() => {
+          handleClip()
+          toast.success("Clip Success!")
+        }}>Clip</Button>
+        <Button style={{marginRight: "8px"}} onClick={()=>{
+          setStage("PRIMARY")
+          toast.success("Switch to draw primary polygon")
+        }}>Plot Primary Polygon</Button>
+        <Button onClick={()=>{
+          setStage("CLIP")
+          toast.success("Switch to draw clip polygon")
+        }}>Plot Clip Polygon</Button>
+      </div>
+      <Stage
+        width={window.innerWidth}
+        height={window.innerHeight}
+        onMouseDown={handleClick}
+        onMouseMove={handleMouseMove}
+      >
+        <Layer>
+          {primaryPolygons.map((points, index) => {
+            if (index === 0) {
+              return (
+                <Line
+                  key={index}
+                  points={points.reduce((a, b) => a.concat(b), [])}
+                  stroke="black"
+                  strokeWidth={5}
+                  closed={true}
+                  draggable
+                  fill={"red"}
+                />
+              );
+            } else {
+              return (
+                <Line
+                  key={index}
+                  points={points.reduce((a, b) => a.concat(b), [])}
+                  stroke="black"
+                  strokeWidth={5}
+                  closed={true}
+                  draggable
+                  fill={"white"}
+                />
+              );
+            }
+          })}
+          {clipPolygons.map((points, index) => {
+            if (index === 0) {
+              return (
+                <Line
+                  key={index}
+                  points={points.reduce((a, b) => a.concat(b), [])}
+                  stroke="black"
+                  strokeWidth={5}
+                  closed={true}
+                  draggable
+                  fill={"blue"}
+                />
+              );
+            } else {
+              return (
+                <Line
+                  key={index}
+                  points={points.reduce((a, b) => a.concat(b), [])}
+                  stroke="black"
+                  strokeWidth={5}
+                  closed={true}
+                  draggable
+                  fill={"white"}
+                />
+              );
+            }
+          })}
+          {points.map((point, index) => {
+            const width = 6;
+            const x = point[0] - width / 2;
+            const y = point[1] - width / 2;
+            return (
+              <Rect
+                key={index}
+                x={x}
+                y={y}
+                width={width}
+                height={width}
+                fill="white"
+                stroke="black"
+                strokeWidth={3}
+              />
+            );
+          })}
+          {
+            <Line
+              points={flattenedPoints}
+              stroke="black"
+              strokeWidth={5}
+              closed={true}
+              dash={[10, 10]}
+              draggable
+              fill={"purple"}
+            />
+          }
+          {intersect.map((points, index) => {
+            if (index === 0) {
+              return (
+                <Line
+                  key={index}
+                  points={points.reduce((a, b) => a.concat(b), [])}
+                  stroke="black"
+                  strokeWidth={5}
+                  closed={true}
+                  draggable
+                  fill={"orange"}
+                />
+              );
+            } else {
+              return (
+                <Line
+                  key={index}
+                  points={points.reduce((a, b) => a.concat(b), [])}
+                  stroke="black"
+                  strokeWidth={5}
+                  closed={true}
+                  draggable
+                  fill={"orange"}
+                />
+              );
+            }
+          })}
+        </Layer>
+      </Stage>
+      <Toaster position="top-center" />
+    </>
   );
 }
 
