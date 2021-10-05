@@ -40,7 +40,7 @@ function App() {
 				}
 				let res = wasm.clip(getVertex(polygons[0]),getVertex(points))
 				console.log(res)
-				res = res[0].points.map(p=>{
+				res = res[0].map(p=>{
 					return [p.x,p.y]
 				});
 				setIntersect(res)
@@ -71,7 +71,7 @@ function App() {
     setPoints([...points.slice(0, index), pos, ...points.slice(index + 1)]);
   };
 
-	const renderPoints = (points, flattenedPoints, index, closed) =>{
+	const renderPoints = (points, flattenedPoints, index, closed, color) =>{
 		return <>
 			<Line
 				key={index}
@@ -80,7 +80,7 @@ function App() {
 				strokeWidth={5}
 				closed={true}
 				draggable
-				fill={getRandomColor()}
+				fill={color}
 			/>
 		{
 			points.map((point, index) => {
@@ -129,13 +129,13 @@ function App() {
         {polygons.map((points,index) => {
           const flattenedPoints = points
             .reduce((a, b) => a.concat(b), []);
-					return renderPoints(points, flattenedPoints, index, true)
+					return renderPoints(points, flattenedPoints, index, true, "red")
         })}
 				{
-					renderPoints(points, flattenedPoints, -1, false)
+					renderPoints(points, flattenedPoints, -1, false, "red")
 				}
 				{
-					renderPoints(intersect, intersects, -2, false)
+					renderPoints(intersect, intersects, -2, false, "blue")
 				}
       </Layer>
     </Stage>

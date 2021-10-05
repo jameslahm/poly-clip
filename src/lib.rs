@@ -1,6 +1,6 @@
 pub mod clip;
 
-use clip::{Polygon, Vertex};
+use clip::{Point, Polygon};
 use wasm_bindgen::prelude::*;
 
 
@@ -23,8 +23,8 @@ pub fn greet() {
 
 #[wasm_bindgen]
 pub fn clip(clip_points: JsValue, primary_points: JsValue) -> JsValue {
-    let clip_points: Vec<Vertex> = clip_points.into_serde().unwrap();
-    let primary_points: Vec<Vertex> = primary_points.into_serde().unwrap();
+    let clip_points: Vec<Point> = clip_points.into_serde().unwrap();
+    let primary_points: Vec<Point> = primary_points.into_serde().unwrap();
     let clip_polygon = Polygon::new(clip_points);
     let primary_polygon = Polygon::new(primary_points);
     let res = clip_polygon.clip(&primary_polygon);
