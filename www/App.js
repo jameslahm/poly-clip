@@ -1,147 +1,145 @@
-import React, { Component } from "react";
+import React, { Component, useState } from "react";
 import Konva from "konva";
 import { render } from "react-dom";
 import { Stage, Layer, Group, Line, Rect } from "react-konva";
-
-class App extends Component {
-  state = {
-    points: [],
-    curMousePos: [0, 0],
-    isMouseOverStartPoint: false,
-    isFinished: false
-  };
-
-  componentDidMount() {
-    console.log(window.innerHeight);
+import * as wasm from "hello-wasm-pack";
+function getRandomColor() {
+  var letters = '0123456789ABCDEF';
+  var color = '#';
+  for (var i = 0; i < 6; i++) {
+    color += letters[Math.floor(Math.random() * 16)];
   }
-
-  getMousePos = stage => {
-    return [stage.getPointerPosition().x, stage.getPointerPosition().y];
-  };
-  handleClick = event => {
-    const {
-      state: { points, isMouseOverStartPoint, isFinished },
-      getMousePos
-    } = this;
-    const stage = event.target.getStage();
-    const mousePos = getMousePos(stage);
-
-    if (isFinished) {
-      return;
-    }
-    if (isMouseOverStartPoint && points.length >= 3) {
-      this.setState({
-        isFinished: true
-      });
-    } else {
-      this.setState({
-        points: [...points, mousePos]
-      });
-    }
-  };
-  handleMouseMove = event => {
-    const { getMousePos } = this;
-    const stage = event.target.getStage();
-    const mousePos = getMousePos(stage);
-
-    this.setState({
-      curMousePos: mousePos
-    });
-  };
-  handleMouseOverStartPoint = event => {
-    if (this.state.isFinished || this.state.points.length < 3) return;
-    event.target.scale({ x: 2, y: 2 });
-    this.setState({
-      isMouseOverStartPoint: true
-    });
-  };
-  handleMouseOutStartPoint = event => {
-    event.target.scale({ x: 1, y: 1 });
-    this.setState({
-      isMouseOverStartPoint: false
-    });
-  };
-  handleDragStartPoint = event => {
-    console.log("start", event);
-  };
-  handleDragMovePoint = event => {
-    const points = this.state.points;
-    const index = event.target.index - 1;
-    console.log(event.target);
-    const pos = [event.target.attrs.x, event.target.attrs.y];
-    console.log("move", event);
-    console.log(pos);
-    this.setState({
-      points: [...points.slice(0, index), pos, ...points.slice(index + 1)]
-    });
-  };
-  handleDragOutPoint = event => {
-    console.log("end", event);
-  };
-
-  render() {
-    const {
-      state: { points, isFinished, curMousePos },
-      handleClick,
-      handleMouseMove,
-      handleMouseOverStartPoint,
-      handleMouseOutStartPoint,
-      handleDragStartPoint,
-      handleDragMovePoint,
-      handleDragEndPoint
-    } = this;
-    // [ [a, b], [c, d], ... ] to [ a, b, c, d, ...]
-    const flattenedPoints = points
-      .concat(isFinished ? [] : curMousePos)
-      .reduce((a, b) => a.concat(b), []);
-    return (
-      <Stage
-        width={window.innerWidth}
-        height={window.innerHeight}
-        onMouseDown={handleClick}
-        onMouseMove={handleMouseMove}
-      >
-        <Layer>
-          <Line
-            points={flattenedPoints}
-            stroke="black"
-            strokeWidth={5}
-            closed={isFinished}
-          />
-          {points.map((point, index) => {
-            const width = 6;
-            const x = point[0] - width / 2;
-            const y = point[1] - width / 2;
-            const startPointAttr =
-              index === 0
-                ? {
-                    hitStrokeWidth: 12,
-                    onMouseOver: handleMouseOverStartPoint,
-                    onMouseOut: handleMouseOutStartPoint
-                  }
-                : null;
-            return (
-              <Rect
-                key={index}
-                x={x}
-                y={y}
-                width={width}
-                height={width}
-                fill="white"
-                stroke="black"
-                strokeWidth={3}
-                onDragStart={handleDragStartPoint}
-                onDragMove={handleDragMovePoint}
-                onDragEnd={handleDragEndPoint}
-                draggable
-                {...startPointAttr}
-              />
-            );
-          })}
-        </Layer>
-      </Stage>
-    );
-  }
+  return color;
 }
 
-export default App
+function App() {
+  const [points, setPoints] = useState([]);
+  const [curMousePos, setCurMousePos] = useState([0, 0]);
+  const [isMouseOverStartPoint, setIsMouseOverStartPoint] = useState(false);
+  const [polygons, setPolygons] = useState([]);
+	const [intersect, setIntersect] = useState([])
+
+  const getMousePos = (stage) => {
+    return [stage.getPointerPosition().x, stage.getPointerPosition().y];
+  };
+  const handleClick = (event) => {
+    const stage = event.target.getStage();
+    const mousePos = getMousePos(stage);
+
+    if (isMouseOverStartPoint && points.length >= 3) {
+      setPoints([]);
+			setPolygons([...polygons, [...points]])
+			if(polygons.length===1){
+				const getVertex = (points) => {
+					return points.map(p=>{
+						return {
+							x: p[0],
+							y: p[1]
+						}
+					})
+				}
+				let res = wasm.clip(getVertex(polygons[0]),getVertex(points))
+				console.log(res)
+				res = res[0].points.map(p=>{
+					return [p.x,p.y]
+				});
+				setIntersect(res)
+			}
+    } else {
+      setPoints([...points, mousePos]);
+    }
+  };
+  const handleMouseMove = (event) => {
+    const stage = event.target.getStage();
+    const mousePos = getMousePos(stage);
+
+    setCurMousePos(mousePos);
+  };
+  const handleMouseOverStartPoint = (event) => {
+    event.target.scale({ x: 2, y: 2 });
+    setIsMouseOverStartPoint(true);
+  };
+  const handleMouseOutStartPoint = (event) => {
+    event.target.scale({ x: 1, y: 1 });
+    setIsMouseOverStartPoint(false);
+  };
+
+  const handleDragMovePoint = (event) => {
+    const points = this.state.points;
+    const index = event.target.index - 1;
+    const pos = [event.target.attrs.x, event.target.attrs.y];
+    setPoints([...points.slice(0, index), pos, ...points.slice(index + 1)]);
+  };
+
+	const renderPoints = (points, flattenedPoints, index, closed) =>{
+		return <>
+			<Line
+				key={index}
+				points={flattenedPoints}
+				stroke="black"
+				strokeWidth={5}
+				closed={true}
+				draggable
+				fill={getRandomColor()}
+			/>
+		{
+			points.map((point, index) => {
+				const width = 6;
+				const x = point[0] - width / 2;
+				const y = point[1] - width / 2;
+				const startPointAttr =
+					index === 0
+						? {
+								hitStrokeWidth: 12,
+								onMouseOver: handleMouseOverStartPoint,
+								onMouseOut: handleMouseOutStartPoint,
+							}
+						: null;
+				return (
+					<Rect
+						key={index}
+						x={x}
+						y={y}
+						width={width}
+						height={width}
+						fill="white"
+						stroke="black"
+						strokeWidth={3}
+						onDragMove={handleDragMovePoint}
+						{...startPointAttr}
+					/>
+				);
+			})
+		}
+		</>
+	}
+
+	const flattenedPoints = points.concat(curMousePos)
+    .reduce((a, b) => a.concat(b), []);
+	const intersects = intersect.reduce((a,b)=>a.concat(b),[])
+
+  return (
+    <Stage
+      width={window.innerWidth}
+      height={window.innerHeight}
+      onMouseDown={handleClick}
+      onMouseMove={handleMouseMove}
+    >
+      <Layer>
+        {polygons.map((points,index) => {
+          const flattenedPoints = points
+            .reduce((a, b) => a.concat(b), []);
+					return renderPoints(points, flattenedPoints, index, true)
+        })}
+				{
+					renderPoints(points, flattenedPoints, -1, false)
+				}
+				{
+					renderPoints(intersect, intersects, -2, false)
+				}
+      </Layer>
+    </Stage>
+  );
+}
+
+export default App;
