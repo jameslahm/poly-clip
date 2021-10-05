@@ -14,7 +14,7 @@ pub struct Line {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Polygon {
-    pub points: Vec<Point>,
+    pub points: Vec<Vec<Point>>,
 }
 
 #[derive(Clone, Debug)]
@@ -136,7 +136,7 @@ impl Polygon {
     pub fn is_clockwise(&self) -> bool {
         let mut sum = 0;
         for (i, p) in self.points.iter().enumerate() {
-            let mut j = if i != self.points.len() - 1 { i + 1 } else { 0 };
+            let j = if i != self.points.len() - 1 { i + 1 } else { 0 };
             sum += (self.points[j].x - p.x) * (self.points[j].y + p.y)
         }
         sum < 0
@@ -151,7 +151,7 @@ impl Polygon {
         let other_option = other.get_inter_vertex_list(self);
         match option {
             PolyListOption::List(subject_list) => match other_option {
-                PolyListOption::List(mut clip_list) => {
+                PolyListOption::List(clip_list) => {
                     Polygon::get_clip_polygons(subject_list, clip_list)
                 }
                 PolyListOption::InsidePoly(list) => Some(vec![list]),
