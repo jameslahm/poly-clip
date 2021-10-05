@@ -1,0 +1,16 @@
+{
+  "name": "poly-clip",
+  "collaborators": [
+    "jameslahm <1366463855@qq.com>"
+  ],
+  "version": "0.1.0",
+  "files": [
+    "poly_clip_bg.wasm",
+    "poly_clip.js",
+    "poly_clip_bg.js",
+    "poly_clip.d.ts"
+  ],
+  "module": "poly_clip.js",
+  "types": "poly_clip.d.ts",
+  "sideEffects": false
+}
