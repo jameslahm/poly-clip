@@ -5,6 +5,7 @@ import { Stage, Layer, Group, Line, Rect, Ellipse } from "react-konva";
 import * as wasm from "hello-wasm-pack";
 import toast, { Toaster } from "react-hot-toast";
 import Modal from "react-modal";
+import helpImg from './help.jpg'
 
 Modal.setAppElement("#root");
 
@@ -372,7 +373,7 @@ function App() {
               current drawing{" "}
             </li>
           </ul>
-          <img width="600px" height="600px" src={"help.jpg"}></img>
+          <img width="600px" height="550px" src={helpImg}></img>
         </div>
       </Modal>
     </>
