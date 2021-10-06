@@ -1,11 +1,22 @@
-import React, { Component, useEffect, useState } from "react";
+import React, {
+  Component,
+  PureComponent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 import Konva from "konva";
 import { render } from "react-dom";
 import { Stage, Layer, Group, Line, Rect, Ellipse } from "react-konva";
 import * as wasm from "hello-wasm-pack";
 import toast, { Toaster } from "react-hot-toast";
 import Modal from "react-modal";
-import helpImg from './help.jpg'
+import helpImg from "./help.jpg";
+import { useStrictMode } from "react-konva";
+import debounce from "lodash.debounce";
+
+useStrictMode(true)
 
 Modal.setAppElement("#root");
 
@@ -70,6 +81,9 @@ function App() {
     return [stage.getPointerPosition().x, stage.getPointerPosition().y];
   };
   const handleClick = (event) => {
+    if (stage === "MOVE") {
+      return;
+    }
     const mousePos = getMousePos(event.target.getStage());
 
     // right click
@@ -94,7 +108,10 @@ function App() {
     setCurMousePos(mousePos);
   };
 
-  const handleClip = () => {
+  const handleClip = (primaryPolygons, clipPolygons) => {
+    if (primaryPolygons.length === 0 || clipPolygons.length === 0) {
+      return;
+    }
     const transform = (polygons) => {
       return polygons
         .map((points) => {
@@ -114,10 +131,10 @@ function App() {
         });
     };
 
-    const primary = transform(primaryPolygons)
-    const clip = transform(clipPolygons)
+    const primary = transform(primaryPolygons);
+    const clip = transform(clipPolygons);
 
-    console.log(primary, clip);
+    console.log(primary, clip)
     const res = wasm.clip(clip, primary);
     if (!res) {
       return;
@@ -127,7 +144,7 @@ function App() {
         return [p.x, p.y];
       });
     });
-    console.log(_intersect);
+    console.log(_intersect)
     setIntersect(_intersect);
   };
 
@@ -137,7 +154,6 @@ function App() {
   const intersects = intersect.reduce((a, b) => a.concat(b), []);
 
   const handleEsc = (event) => {
-    console.log(event);
     if (event.key === "Escape") setPoints([]);
   };
 
@@ -147,6 +163,119 @@ function App() {
       document.removeEventListener("keydown", handleEsc);
     };
   }, []);
+
+  const handleMovePrimary = (event) => {
+    const x = event.target.attrs.x
+    const y = event.target.attrs.y
+    const deltaX = x
+    const deltaY = y
+    const res = primaryPolygons.map((points, index) => {
+      if(index!=event.target.index){
+        return  [...points]
+      }
+      return points.map((p) => {
+        return [p[0] + deltaX, p[1] + deltaY];
+      });
+    });
+    handleClip(res, clipPolygons)
+  };
+
+  const handleDragEnd = (event) => {
+    const x = event.target.attrs.x
+    const y = event.target.attrs.y
+    const deltaX = x
+    const deltaY = y
+    const res = primaryPolygons.map((points, index) => {
+      if(index!=event.target.index){
+        return  [...points]
+      }
+      return points.map((p) => {
+        return [p[0] + deltaX, p[1] + deltaY];
+      });
+    });
+    setPrimaryPolygons(res)
+    handleClip(res, clipPolygons)
+  };
+
+  const handleMoveClip = (event) => {
+    const x = event.target.attrs.x
+    const y = event.target.attrs.y
+    const deltaX = x
+    const deltaY = y
+    const res = clipPolygons.map((points, index) => {
+      if(index!=event.target.index - primaryPolygons.length){
+        return  [...points]
+      }
+      return points.map((p) => {
+        return [p[0] + deltaX, p[1] + deltaY];
+      });
+    });
+    console.log("Hello")
+    handleClip(primaryPolygons, res)
+  };
+
+  const handleDragEndClip = (event) => {
+    const x = event.target.attrs.x
+    const y = event.target.attrs.y
+    const deltaX = x
+    const deltaY = y
+    const res = clipPolygons.map((points, index) => {
+      if(index!=event.target.index  - primaryPolygons.length){
+        return  [...points]
+      }
+      return points.map((p) => {
+        return [p[0] + deltaX, p[1] + deltaY];
+      });
+    });
+    setClipPolygons(res)
+    handleClip(primaryPolygons, res)
+  };
+
+
+
+  useEffect(()=>{
+    if(stage==="MOVE"){
+      handleClip(primaryPolygons, clipPolygons)
+    }
+  }, [stage, primaryPolygons, clipPolygons])
+
+  const renderPolygons = (polygons, color1, color2, onDragMove, onDragEnd) => {
+    return polygons.map((points, index) => {
+      if (index === 0) {
+        return (
+          <Line
+            x={0}
+            y={0}
+            key={index}
+            opacity={0.8}
+            points={points.reduce((a, b) => a.concat(b), [])}
+            stroke="black"
+            strokeWidth={5}
+            closed={true}
+            draggable
+            fill={color1}
+            onDragMove={onDragMove}
+            onDragEnd= {onDragEnd}
+          />
+        );
+      } else {
+        return (
+          <Line
+            key={index}
+            opacity={0.8}
+            points={points.reduce((a, b) => a.concat(b), [])}
+            stroke="black"
+            strokeWidth={5}
+            closed={true}
+            draggable
+            fill={color2}
+            onDragMove={onDragMove}
+            onDragEnd= {onDragEnd}
+          />
+        );
+      }
+    });
+  };
 
   return (
     <>
@@ -168,11 +297,19 @@ function App() {
           <Button
             disabled={!(primaryPolygons.length && clipPolygons.length)}
             onClick={() => {
-              handleClip();
+              handleClip(primaryPolygons, clipPolygons);
               toast.success("Clip Success!");
             }}
           >
             Clip
+          </Button>
+          <Button
+            onClick={() => {
+              setStage("MOVE");
+              toast.success("Switch to move");
+            }}
+          >
+            Move
           </Button>
           <Button
             style={{ marginRight: "8px" }}
@@ -218,60 +355,12 @@ function App() {
         onMouseMove={handleMouseMove}
       >
         <Layer>
-          {primaryPolygons.map((points, index) => {
-            if (index === 0) {
-              return (
-                <Line
-                  key={index}
-                  points={points.reduce((a, b) => a.concat(b), [])}
-                  stroke="black"
-                  strokeWidth={5}
-                  closed={true}
-                  draggable
-                  fill={"red"}
-                />
-              );
-            } else {
-              return (
-                <Line
-                  key={index}
-                  points={points.reduce((a, b) => a.concat(b), [])}
-                  stroke="black"
-                  strokeWidth={5}
-                  closed={true}
-                  draggable
-                  fill={"white"}
-                />
-              );
-            }
-          })}
-          {clipPolygons.map((points, index) => {
-            if (index === 0) {
-              return (
-                <Line
-                  key={index}
-                  points={points.reduce((a, b) => a.concat(b), [])}
-                  stroke="black"
-                  strokeWidth={5}
-                  closed={true}
-                  draggable
-                  fill={"blue"}
-                />
-              );
-            } else {
-              return (
-                <Line
-                  key={index}
-                  points={points.reduce((a, b) => a.concat(b), [])}
-                  stroke="black"
-                  strokeWidth={5}
-                  closed={true}
-                  draggable
-                  fill={"white"}
-                />
-              );
-            }
-          })}
+          {useMemo(() => {
+            return renderPolygons(primaryPolygons, "red", "white", handleMovePrimary, handleDragEnd)}, [primaryPolygons, clipPolygons])
+          }
+          {useMemo(() => {
+            return renderPolygons(clipPolygons, "blue", "white", handleMoveClip, handleDragEndClip)}, [primaryPolygons, clipPolygons])
+          }
           {points.map((point, index) => {
             const width = 6;
             const x = point[0] - width / 2;
@@ -301,31 +390,17 @@ function App() {
             />
           }
           {intersect.map((points, index) => {
-            if (index === 0) {
-              return (
-                <Line
-                  key={index}
-                  points={points.reduce((a, b) => a.concat(b), [])}
-                  stroke="black"
-                  strokeWidth={5}
-                  closed={true}
-                  draggable
-                  fill={"orange"}
-                />
-              );
-            } else {
-              return (
-                <Line
-                  key={index}
-                  points={points.reduce((a, b) => a.concat(b), [])}
-                  stroke="black"
-                  strokeWidth={5}
-                  closed={true}
-                  draggable
-                  fill={"orange"}
-                />
-              );
-            }
+            return (
+              <Line
+                key={index}
+                points={points.reduce((a, b) => a.concat(b), [])}
+                stroke="black"
+                strokeWidth={5}
+                closed={true}
+                draggable
+                fill={"orange"}
+              />
+            );
           })}
         </Layer>
       </Stage>
