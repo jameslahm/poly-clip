@@ -135,17 +135,22 @@ function App() {
     const clip = transform(clipPolygons);
 
     console.log(primary, clip)
-    const res = wasm.clip(clip, primary);
-    if (!res) {
-      return;
-    }
-    const _intersect = res.map((points) => {
-      return points.map((p) => {
-        return [p.x, p.y];
+    try {
+      const res = wasm.clip(clip, primary);
+      if (!res) {
+        return;
+      }
+      const _intersect = res.map((points) => {
+        return points.map((p) => {
+          return [p.x, p.y];
+        });
       });
-    });
-    console.log(_intersect)
-    setIntersect(_intersect);
+      console.log(_intersect)
+      setIntersect(_intersect);
+    } catch (error) {
+      toast.error("Something wrong happened");
+      setIntersect([]);
+    }
   };
 
   const flattenedPoints = points
